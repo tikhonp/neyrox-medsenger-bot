@@ -54,7 +54,7 @@ func (c *Client) Login(email, password string) (*TokenPair, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusUnauthorized {
 		return nil, ErrInvalidCredentials
 	}
@@ -81,7 +81,7 @@ func (c *Client) Refresh(refresh string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusUnauthorized {
 		return "", ErrUnauthorized
 	}
@@ -120,17 +120,17 @@ func (c *Client) FetchMeasurements(accessToken, metric string, since *time.Time)
 			return nil, err
 		}
 		if resp.StatusCode == http.StatusUnauthorized {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			return nil, ErrUnauthorized
 		}
 		if resp.StatusCode != http.StatusOK {
 			err := apiError("fetch "+metric, resp)
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			return nil, err
 		}
 		var page paginatedMeasurements
 		err = json.NewDecoder(resp.Body).Decode(&page)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if err != nil {
 			return nil, err
 		}
