@@ -2,8 +2,6 @@ APP_VERSION := $(shell git rev-parse HEAD)
 
 ENVS := COMPOSE_BAKE=true
 
-DB_STRING = $(shell docker exec -it neyrox-agent /bin/manage -c print-db-string)
-
 .PHONY: run dev build-dev fdev prod fprod logs-prod go-to-server-container \
 	db-status db-up db-down db-reset templ worker build-prod-image update-deps
 
@@ -31,16 +29,16 @@ go-to-server-container:
 	docker exec -it --tty neyrox-agent /bin/sh
 
 db-status:
-	docker exec -it --tty neyrox-agent goose postgres "$(DB_STRING)" -dir=internal/db/migrations status
+	docker exec -it --tty neyrox-agent /bin/manage -c migrate-status
 
 db-up:
-	docker exec -it --tty neyrox-agent goose postgres "$(DB_STRING)" -dir=internal/db/migrations up
+	docker exec -it --tty neyrox-agent /bin/manage -c migrate-up
 
 db-down:
-	docker exec -it --tty neyrox-agent goose postgres "$(DB_STRING)" -dir=internal/db/migrations down
+	docker exec -it --tty neyrox-agent /bin/manage -c migrate-down
 
 db-reset:
-	docker exec -it --tty neyrox-agent goose postgres "$(DB_STRING)" -dir=internal/db/migrations reset
+	docker exec -it --tty neyrox-agent /bin/manage -c migrate-reset
 
 templ:
 	docker exec -it --tty neyrox-agent templ generate

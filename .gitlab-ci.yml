@@ -27,6 +27,10 @@ build-multiarch:
 
     - docker buildx create --use || docker buildx use default
 
-    - docker buildx build --build-arg APP_VERSION="$CI_COMMIT_SHA" --platform=linux/amd64,linux/arm64/v8 --target server -t $REGISTRY/$IMAGE_NAME:server-latest --push .
+    # ARM build disabled — building for Intel (amd64) only.
+    # - docker buildx build --build-arg APP_VERSION="$CI_COMMIT_SHA" --platform=linux/amd64,linux/arm64/v8 --target server -t $REGISTRY/$IMAGE_NAME:server-latest --push .
+    # - docker buildx build --build-arg APP_VERSION="$CI_COMMIT_SHA" --platform=linux/amd64,linux/arm64/v8 --target worker -t $REGISTRY/$IMAGE_NAME:worker-latest --push .
 
-    - docker buildx build --build-arg APP_VERSION="$CI_COMMIT_SHA" --platform=linux/amd64,linux/arm64/v8 --target worker -t $REGISTRY/$IMAGE_NAME:worker-latest --push .
+    - docker buildx build --build-arg APP_VERSION="$CI_COMMIT_SHA" --platform=linux/amd64 --target server -t $REGISTRY/$IMAGE_NAME:server-latest --push .
+
+    - docker buildx build --build-arg APP_VERSION="$CI_COMMIT_SHA" --platform=linux/amd64 --target worker -t $REGISTRY/$IMAGE_NAME:worker-latest --push .

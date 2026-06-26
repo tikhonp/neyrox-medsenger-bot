@@ -30,25 +30,19 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags "$LDFLAGS" -o /bin/worker ./cmd/worker
 
 
-FROM golang:${GOVERSION}-alpine AS goose-builder
-RUN go install -tags='no_clickhouse no_libsql no_mssql no_mysql no_sqlite3 no_vertica no_ydb' \
-    github.com/pressly/goose/v3/cmd/goose@latest
-
-
 FROM alpine AS pre-prod
 WORKDIR /src
 COPY --from=app-builder /usr/local/go/lib/time/zoneinfo.zip /
 ENV ZONEINFO=/zoneinfo.zip
-COPY internal/db/migrations ./internal/db/migrations
 ENV DEBUG=false
 ENV SERVER_PORT=80
 
 
 FROM pre-prod AS server
 COPY --from=app-builder /bin/server /bin/manage /bin/
-COPY --from=goose-builder /go/bin/goose /bin/
 EXPOSE 80
-ENTRYPOINT ["/bin/sh", "-c", "goose postgres \"$(manage -c print-db-string)\" -dir=internal/db/migrations up && server"]
+# Migrations are embedded in the manage binary (internal/db/migrate.go); apply them, then serve.
+ENTRYPOINT ["/bin/sh", "-c", "manage -c migrate-up && server"]
 
 
 FROM pre-prod AS worker
