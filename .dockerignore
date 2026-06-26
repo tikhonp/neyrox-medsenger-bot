@@ -1,0 +1,11 @@
+.git
+.gitignore
+.env
+.env.example
+.air.toml
+*.md
+.github
+.gitlab-ci.yml
+.dockerignore
+compose.yaml
+compose.test-prod.yaml

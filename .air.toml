@@ -1,0 +1,10 @@
+root = "."
+tmp_dir = "/tmp"
+
+[build]
+pre_cmd = ["templ generate", "go build -o /bin/manage ./cmd/manage", "go build -o /bin/worker ./cmd/worker"]
+cmd = "go build -o /tmp/main ./cmd/server"
+bin = "/tmp/main"
+include_ext = ["go", "templ"]
+exclude_regex = ["_templ\\.go"]
+exclude_dir = ["internal/db/migrations"]

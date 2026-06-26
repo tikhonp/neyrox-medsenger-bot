@@ -1,0 +1,32 @@
+workflow:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: always
+    - when: never
+
+image: docker:28
+
+services:
+  - docker:dind
+
+variables:
+  DOCKER_TLS_CERTDIR: ""
+  DOCKER_HOST: tcp://docker:2375
+  REGISTRY: docker.telepat.online
+  IMAGE_NAME: agents-neyrox-image
+
+stages:
+  - build
+
+build-multiarch:
+  stage: build
+  tags:
+    - macmini-builder
+  script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $REGISTRY
+
+    - docker buildx create --use || docker buildx use default
+
+    - docker buildx build --build-arg APP_VERSION="$CI_COMMIT_SHA" --platform=linux/amd64,linux/arm64/v8 --target server -t $REGISTRY/$IMAGE_NAME:server-latest --push .
+
+    - docker buildx build --build-arg APP_VERSION="$CI_COMMIT_SHA" --platform=linux/amd64,linux/arm64/v8 --target worker -t $REGISTRY/$IMAGE_NAME:worker-latest --push .

@@ -1,0 +1,42 @@
+services:
+  server:
+    container_name: neyrox-agent
+    build:
+      context: .
+      target: dev
+    ports:
+      - "3060:3060"
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - DEBUG=true
+    volumes:
+      - ./:/src
+
+  db:
+    container_name: neyrox-bot-dev-db
+    image: postgres:17
+    restart: always
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_HOST_AUTH_METHOD=trust
+      - POSTGRES_USER=${DB_LOGIN}
+      - POSTGRES_DB=${DB_DATABASE}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-q", "-U", "${DB_LOGIN}", "-d", "${DB_DATABASE}" ]
+      interval: 1s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  db-data:
+    name: "neyrox-db-data"

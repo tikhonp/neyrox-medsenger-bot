@@ -1,0 +1,32 @@
+services:
+  server:
+    container_name: neyrox-agent
+    build:
+      context: .
+      target: server
+    restart: unless-stopped
+    network_mode: "host"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    env_file:
+      - .env
+
+  worker:
+    container_name: neyrox-worker
+    build:
+      context: .
+      target: worker
+    restart: unless-stopped
+    network_mode: "host"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    env_file:
+      - .env
+    depends_on:
+      - server

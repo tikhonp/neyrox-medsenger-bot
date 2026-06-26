@@ -1,0 +1,56 @@
+package views
+
+import (
+	"github.com/tikhonp/medsenger-neyrox-bot/internal/bviews"
+	"github.com/tikhonp/medsenger-neyrox-bot/internal/db/models"
+)
+
+templ Settings(contract *models.Contract, account *models.NeyroxAccount, agentToken string, errMsg string) {
+	@bviews.Base("Настройки Neyrox") {
+		<div class="py-4" style="max-width: 480px;">
+			<h1 class="h4 mb-4">Подключение умного браслета Neyrox</h1>
+			if contract.PatientName.Valid {
+				<p class="text-muted">Пациент: { contract.PatientName.String }</p>
+			}
+			if errMsg != "" {
+				<div class="alert alert-danger" role="alert">{ errMsg }</div>
+			}
+			if account != nil {
+				@connectedCard(account, agentToken)
+			} else {
+				@connectForm(agentToken)
+			}
+		</div>
+	}
+}
+
+templ connectedCard(account *models.NeyroxAccount, agentToken string) {
+	<div class="card">
+		<div class="card-body">
+			<p class="card-text">Аккаунт Neyrox подключён: <span class="fw-semibold">{ account.Email }</span></p>
+			<form method="POST" action="/medsenger/settings/connect">
+				<input type="hidden" name="agent-token" value={ agentToken }/>
+			</form>
+			<form method="POST" action="/medsenger/settings/disconnect">
+				<input type="hidden" name="agent-token" value={ agentToken }/>
+				<button type="submit" class="btn btn-outline-danger">Отключить аккаунт</button>
+			</form>
+		</div>
+	</div>
+}
+
+templ connectForm(agentToken string) {
+	<p>Войдите в свой аккаунт Neyrox, чтобы передавать показания браслета лечащему врачу.</p>
+	<form method="POST" action="/medsenger/settings/connect">
+		<input type="hidden" name="agent-token" value={ agentToken }/>
+		<div class="mb-3">
+			<label class="form-label" for="email">Email</label>
+			<input class="form-control" type="email" id="email" name="email" required/>
+		</div>
+		<div class="mb-3">
+			<label class="form-label" for="password">Пароль</label>
+			<input class="form-control" type="password" id="password" name="password" required/>
+		</div>
+		<button type="submit" class="btn btn-primary">Подключить</button>
+	</form>
+}
