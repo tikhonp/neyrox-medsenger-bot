@@ -1,9 +1,7 @@
 services:
   server:
     container_name: neyrox-agent
-    build:
-      context: .
-      target: server
+    image: docker.telepat.online/agents-neyrox-image:server-latest
     restart: unless-stopped
     network_mode: "host"
     logging:
@@ -16,9 +14,7 @@ services:
 
   worker:
     container_name: neyrox-worker
-    build:
-      context: .
-      target: worker
+    image: docker.telepat.online/agents-neyrox-image:worker-latest
     restart: unless-stopped
     network_mode: "host"
     logging:
