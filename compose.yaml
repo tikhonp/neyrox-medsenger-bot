@@ -5,7 +5,7 @@ services:
       context: .
       target: dev
     ports:
-      - "3060:3060"
+      - "3056:3056"
     depends_on:
       db:
         condition: service_healthy
