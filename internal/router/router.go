@@ -35,7 +35,9 @@ func New(cfg *config.Config) *echo.Echo {
 	}
 	e.Use(middleware.RequestLoggerWithConfig(util.GetRequestLoggerConfig(!cfg.Server.Debug)))
 	e.Use(middleware.Recover())
-	e.Use(middleware.CORS())
+	// echo v5 no longer defaults AllowOrigins to "*" (v4 did, which the
+	// reference scaffold relied on); pass it explicitly to keep allow-all.
+	e.Use(middleware.CORS("*"))
 
 	return e
 }
