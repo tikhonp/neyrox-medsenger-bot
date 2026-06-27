@@ -30,7 +30,7 @@ func Migrate(cfg *config.Database, command string, args ...string) error {
 	if err != nil {
 		return fmt.Errorf("open db for migration: %w", err)
 	}
-	defer sqldb.Close()
+	defer func() { _ = sqldb.Close() }()
 
 	if err := goose.SetDialect("postgres"); err != nil {
 		return fmt.Errorf("set goose dialect: %w", err)

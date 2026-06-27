@@ -28,10 +28,10 @@ templ connectedCard(account *models.NeyroxAccount, agentToken string) {
 	<div class="card">
 		<div class="card-body">
 			<p class="card-text">Аккаунт Neyrox подключён: <span class="fw-semibold">{ account.Email }</span></p>
-			<form method="POST" action="/medsenger/settings/connect">
+			<form method="POST" action={ templ.URL(bviews.Host + "/medsenger/settings/connect") }>
 				<input type="hidden" name="agent-token" value={ agentToken }/>
 			</form>
-			<form method="POST" action="/medsenger/settings/disconnect">
+			<form method="POST" action={ templ.URL(bviews.Host + "/medsenger/settings/disconnect") }>
 				<input type="hidden" name="agent-token" value={ agentToken }/>
 				<button type="submit" class="btn btn-outline-danger">Отключить аккаунт</button>
 			</form>
@@ -41,7 +41,7 @@ templ connectedCard(account *models.NeyroxAccount, agentToken string) {
 
 templ connectForm(agentToken string) {
 	<p>Войдите в свой аккаунт Neyrox, чтобы передавать показания браслета лечащему врачу.</p>
-	<form method="POST" action="/medsenger/settings/connect">
+	<form method="POST" action={ templ.URL(bviews.Host + "/medsenger/settings/connect") }>
 		<input type="hidden" name="agent-token" value={ agentToken }/>
 		<div class="mb-3">
 			<label class="form-label" for="email">Email</label>
