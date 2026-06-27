@@ -25,3 +25,17 @@ type paginatedMeasurements struct {
 	Next    *string       `json:"next"`
 	Results []Measurement `json:"results"`
 }
+
+// TypeIndicator is one row of the Neyrox /api/v1/typeindicators/ reference table.
+// Measurements reference it by ID via their type_indicator field; the Name (e.g.
+// "Систолическое давление") is what lets us tell systolic from diastolic.
+type TypeIndicator struct {
+	ID   string  `json:"id"`
+	Name *string `json:"name"`
+}
+
+// paginatedTypeIndicators matches DRF's default pagination wrapper for typeindicators.
+type paginatedTypeIndicators struct {
+	Next    *string         `json:"next"`
+	Results []TypeIndicator `json:"results"`
+}

@@ -97,6 +97,44 @@ func (c *Client) Refresh(refresh string) (string, error) {
 	return out.Access, nil
 }
 
+// getPaginated GETs startURL with the bearer token and follows DRF "next" links,
+// calling decode for each page body. decode returns the next page URL (nil to stop).
+func (c *Client) getPaginated(accessToken, startURL string, decode func(io.Reader) (*string, error)) error {
+	next := startURL
+	for next != "" {
+		req, err := http.NewRequest(http.MethodGet, next, nil)
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Authorization", "Bearer "+accessToken)
+		req.Header.Set("Accept", "application/json")
+		resp, err := c.http.Do(req)
+		if err != nil {
+			return err
+		}
+		if resp.StatusCode == http.StatusUnauthorized {
+			_ = resp.Body.Close()
+			return ErrUnauthorized
+		}
+		if resp.StatusCode != http.StatusOK {
+			err := apiError("GET "+next, resp)
+			_ = resp.Body.Close()
+			return err
+		}
+		nextURL, err := decode(resp.Body)
+		_ = resp.Body.Close()
+		if err != nil {
+			return err
+		}
+		if nextURL != nil {
+			next = *nextURL
+		} else {
+			next = ""
+		}
+	}
+	return nil
+}
+
 // FetchMeasurements returns measurements for the given metric endpoint (e.g. "pulse"),
 // optionally filtered to those with date_device after `since`, following DRF pagination.
 func (c *Client) FetchMeasurements(accessToken, metric string, since *time.Time) ([]Measurement, error) {
@@ -105,41 +143,37 @@ func (c *Client) FetchMeasurements(accessToken, metric string, since *time.Time)
 	if since != nil {
 		q.Set("date_device_after", since.UTC().Format(time.RFC3339))
 	}
-	next := fmt.Sprintf("%s/api/v1/%s/?%s", c.host, metric, q.Encode())
+	start := fmt.Sprintf("%s/api/v1/%s/?%s", c.host, metric, q.Encode())
 
 	var all []Measurement
-	for next != "" {
-		req, err := http.NewRequest(http.MethodGet, next, nil)
-		if err != nil {
-			return nil, err
-		}
-		req.Header.Set("Authorization", "Bearer "+accessToken)
-		req.Header.Set("Accept", "application/json")
-		resp, err := c.http.Do(req)
-		if err != nil {
-			return nil, err
-		}
-		if resp.StatusCode == http.StatusUnauthorized {
-			_ = resp.Body.Close()
-			return nil, ErrUnauthorized
-		}
-		if resp.StatusCode != http.StatusOK {
-			err := apiError("fetch "+metric, resp)
-			_ = resp.Body.Close()
-			return nil, err
-		}
+	err := c.getPaginated(accessToken, start, func(body io.Reader) (*string, error) {
 		var page paginatedMeasurements
-		err = json.NewDecoder(resp.Body).Decode(&page)
-		_ = resp.Body.Close()
-		if err != nil {
+		if err := json.NewDecoder(body).Decode(&page); err != nil {
 			return nil, err
 		}
 		all = append(all, page.Results...)
-		if page.Next != nil {
-			next = *page.Next
-		} else {
-			next = ""
+		return page.Next, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return all, nil
+}
+
+// FetchTypeIndicators returns the Neyrox typeindicators reference table (id + name).
+// It is small reference data; the worker resolves the systolic/diastolic rows from it.
+func (c *Client) FetchTypeIndicators(accessToken string) ([]TypeIndicator, error) {
+	var all []TypeIndicator
+	err := c.getPaginated(accessToken, c.host+"/api/v1/typeindicators/", func(body io.Reader) (*string, error) {
+		var page paginatedTypeIndicators
+		if err := json.NewDecoder(body).Decode(&page); err != nil {
+			return nil, err
 		}
+		all = append(all, page.Results...)
+		return page.Next, nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return all, nil
 }
