@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-ARG GOVERSION=1.26.4
+ARG GOVERSION=1.26.5
 
 
 FROM golang:${GOVERSION}-alpine AS dev

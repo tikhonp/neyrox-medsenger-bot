@@ -7,3 +7,24 @@ test.rest
 .env
 test/
 CLAUDE.md
+
+# Local/generated artifacts
+.DS_Store
+.AppleDouble
+.LSOverride
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+node_modules/
+dist/
+build/
+coverage/
+*.log

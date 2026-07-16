@@ -11,9 +11,10 @@ import (
 func ConfigureMedsengerAgentGroup(g *echo.Group, deps util.Dependencies) {
 	mah := handlers.MedsengerAgentHandler(deps)
 
-	g.Use(util.AgentTokenJSON(deps.Maigo, maigo.RequestRoleSystem))
-
-	g.POST("/init", mah.Init)
-	g.POST("/status", mah.Status)
-	g.POST("/remove", mah.Remove)
+	g.POST("/init", mah.Init, util.AgentTokenJSON(deps.Maigo, maigo.RequestRoleSystem))
+	g.POST("/status", mah.Status, util.AgentTokenJSON(deps.Maigo, maigo.RequestRoleSystem))
+	g.POST("/remove", mah.Remove, util.AgentTokenJSON(deps.Maigo, maigo.RequestRoleSystem))
+	g.GET("/scenario-capabilities/v1", mah.ScenarioCapabilities, util.AgentTokenHeader(deps.Maigo, maigo.RequestRoleSystem))
+	g.GET("/scenario-capabilities/v1/objects/:object_type", mah.ScenarioCapabilityObjects, util.AgentTokenHeader(deps.Maigo, maigo.RequestRoleSystem))
+	g.GET("/scenario-capabilities/v1/objects/:object_type/:object_id", mah.ScenarioCapabilityObject, util.AgentTokenHeader(deps.Maigo, maigo.RequestRoleSystem))
 }

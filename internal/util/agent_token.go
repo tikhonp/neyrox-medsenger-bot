@@ -81,6 +81,21 @@ func AgentTokenGetParam(client *maigo.Client, roles ...maigo.RequestRole) echo.M
 	}
 }
 
+func AgentTokenHeader(client *maigo.Client, roles ...maigo.RequestRole) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c *echo.Context) error {
+			agentToken := c.Request().Header.Get("X-Agent-Token")
+			if agentToken == "" {
+				agentToken = c.QueryParam("agent_token")
+			}
+			if err := processAgentToken(agentToken, c, client, roles); err != nil {
+				return err
+			}
+			return next(c)
+		}
+	}
+}
+
 // AgentTokenForm reads the token from the "agent-token" form field (htmx form posts).
 func AgentTokenForm(client *maigo.Client, roles ...maigo.RequestRole) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {

@@ -9,6 +9,16 @@ import (
 	"github.com/tikhonp/medsenger-neyrox-bot/internal/util"
 )
 
+const neyroxScenarioObjectType = "neyrox_devices"
+
+func neyroxScenarioItem() map[string]any {
+	return map[string]any{
+		"id":          1,
+		"title":       "Neyrox Tracker",
+		"description": "Умный браслет Neyrox для мониторинга активности и показателей пациента.",
+	}
+}
+
 type initModel struct {
 	ClinicID  int    `json:"clinic_id" validate:"required"`
 	AgentName string `json:"agent_name" validate:"required"`
@@ -75,6 +85,47 @@ func (mah *MedsengerAgentHandler) Status(c *echo.Context) error {
 		IsTrackingData:     true,
 		SupportedScenarios: []string{},
 		TrackedContracts:   trackedContracts,
+	})
+}
+
+func (mah *MedsengerAgentHandler) ScenarioCapabilities(c *echo.Context) error {
+	return c.JSON(http.StatusOK, map[string]any{
+		"version": 1,
+		"agent": map[string]any{
+			"code":  "neyrox",
+			"title": "Neyrox Tracker",
+		},
+		"params": []any{},
+		"object_types": []map[string]any{
+			{
+				"type":        neyroxScenarioObjectType,
+				"title":       "Neyrox Tracker",
+				"description": "Подключение умного браслета Neyrox.",
+				"icon":        "watch",
+				"selection":   "many",
+			},
+		},
+	})
+}
+
+func (mah *MedsengerAgentHandler) ScenarioCapabilityObjects(c *echo.Context) error {
+	if c.Param("object_type") != neyroxScenarioObjectType {
+		return echo.NewHTTPError(http.StatusNotFound, "Object type not found.")
+	}
+	return c.JSON(http.StatusOK, map[string]any{
+		"type":  neyroxScenarioObjectType,
+		"items": []map[string]any{neyroxScenarioItem()},
+	})
+}
+
+func (mah *MedsengerAgentHandler) ScenarioCapabilityObject(c *echo.Context) error {
+	if c.Param("object_type") != neyroxScenarioObjectType || c.Param("object_id") != "1" {
+		return echo.NewHTTPError(http.StatusNotFound, "Object not found.")
+	}
+	return c.JSON(http.StatusOK, map[string]any{
+		"type":   neyroxScenarioObjectType,
+		"object": neyroxScenarioItem(),
+		"params": []any{},
 	})
 }
 
