@@ -21,7 +21,7 @@ services:
     image: postgres:18
     restart: always
     volumes:
-      - db-data:/var/lib/postgresql/data
+      - db-data:/var/lib/postgresql
     env_file:
       - .env
     environment:

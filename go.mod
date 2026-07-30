@@ -8,20 +8,20 @@ require (
 	github.com/getsentry/sentry-go/echo v0.48.0
 	github.com/go-playground/validator/v10 v10.30.3
 	github.com/jmoiron/sqlx v1.4.0
-	github.com/labstack/echo/v5 v5.3.0
+	github.com/labstack/echo/v5 v5.3.1
 	github.com/lib/pq v1.12.3
-	github.com/pressly/goose/v3 v3.27.2
-	github.com/tikhonp/maigo v1.0.0
+	github.com/pressly/goose/v3 v3.27.3
+	github.com/tikhonp/maigo v1.0.1
 )
 
 require (
-	github.com/gabriel-vasile/mimetype v1.4.13 // indirect
+	github.com/gabriel-vasile/mimetype v1.4.15 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
-	github.com/leodido/go-urn v1.4.0 // indirect
+	github.com/leodido/go-urn v1.5.0 // indirect
 	github.com/mfridman/interpolate v0.0.2 // indirect
-	github.com/sethvargo/go-retry v0.3.0 // indirect
+	github.com/sethvargo/go-retry v0.4.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/crypto v0.54.0 // indirect
 	golang.org/x/net v0.57.0 // indirect
@@ -29,7 +29,7 @@ require (
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260715232425-e75dac1f907d // indirect
-	google.golang.org/grpc v1.82.1 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260729162451-8efbd57d26e0 // indirect
+	google.golang.org/grpc v1.83.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )

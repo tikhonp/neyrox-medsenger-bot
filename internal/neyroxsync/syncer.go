@@ -74,7 +74,7 @@ var syncedMetrics = []metricMapping{
 	// {NeyroxMetric: "vitality", MedsengerCategory: ""},
 	// {NeyroxMetric: "functionalage", MedsengerCategory: ""},
 	// {NeyroxMetric: "adoptability", MedsengerCategory: ""},
-	// {NeyroxMetric: "inflammation", MedsengerCategory: ""},
+	{NeyroxMetric: "inflammation", MedsengerCategory: "neyrox_inflammation"},
 	// {NeyroxMetric: "neuroplasticity", MedsengerCategory: ""},
 	// {NeyroxMetric: "formindicators", MedsengerCategory: ""},          // form/survey data, nullable date_device
 }
