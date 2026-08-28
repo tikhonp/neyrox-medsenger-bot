@@ -50,11 +50,14 @@ var syncedMetrics = []metricMapping{
 	// bloodpressure carries one `value` tagged systolic/diastolic via type_indicator,
 	// so it maps to two Medsenger categories and can't be a single static entry.
 
+	// --- Handled separately in appendSleep (see sleep.go) ---
+	// hypnogram is not a scalar: it maps to the six time_interval categories (in_bed,
+	// awake, asleep_core, asleep_deep, asleep_REM, asleep_unspecified).
+	//
+	// The `sleep` endpoint stays out entirely: its rows are running per-stage totals in
+	// hours, re-sent every ~15 min, not measurements of an instant — see sleep.go.
+
 	// --- No matching Medsenger category yet (register one, then uncomment) ---
-	// sleep: endpoint mixes deep ("Глубокий сон") + light ("Поверхностный сон") stage
-	// durations by type_indicator — not a single value, and Medsenger's "sleep" is a
-	// quality score ("Качество сна"). Needs per-stage categories + a BP-style split.
-	// {NeyroxMetric: "sleep", MedsengerCategory: ""},
 	// {NeyroxMetric: "averagepulse", MedsengerCategory: ""},            // only "pulse" (resting) exists
 	// {NeyroxMetric: "heartratevariability", MedsengerCategory: ""},    // no HRV category
 	// {NeyroxMetric: "heartratevariabilityecg", MedsengerCategory: ""}, // no HRV category
@@ -84,11 +87,11 @@ type Syncer struct {
 	maigo *maigo.Client
 	nc    *neyroxclient.Client
 
-	// Blood-pressure type_indicator UUIDs, resolved once from Neyrox's typeindicators
-	// reference table. RunOnce runs in a single goroutine, so no lock is needed.
-	bpResolved  bool
-	bpSystolic  string
-	bpDiastolic string
+	// indicators maps a type_indicator UUID to its lower-cased name, loaded once from
+	// Neyrox's typeindicators reference table; blood pressure resolves its two
+	// categories through it. RunOnce runs in a single goroutine, so no lock is needed.
+	indicators       map[string]string
+	indicatorsLoaded bool
 }
 
 func New(database db.ModelsFactory, mc *maigo.Client, nc *neyroxclient.Client) *Syncer {
@@ -115,6 +118,9 @@ func (s *Syncer) RunOnce() error {
 const (
 	bpSystolicCategory  = "systolic_pressure"
 	bpDiastolicCategory = "diastolic_pressure"
+
+	// bloodPressureMetric is the Neyrox endpoint, and watermark key, for blood pressure.
+	bloodPressureMetric = "bloodpressure"
 )
 
 func (s *Syncer) syncAccount(acc *models.NeyroxAccount) error {
@@ -125,22 +131,26 @@ func (s *Syncer) syncAccount(acc *models.NeyroxAccount) error {
 		return err
 	}
 
-	var since *time.Time
-	if acc.LastSync.Valid {
-		since = &acc.LastSync.Time
+	watermarks, err := s.loadWatermarks(acc)
+	if err != nil {
+		return err
 	}
 
 	var records []maigo.Record
-	newest := acc.LastSync
+	// advanced holds the new watermark of every metric that produced records. Nothing
+	// is persisted until AddRecords has succeeded, so a failed push is simply retried.
+	advanced := make(map[string]sql.NullTime)
 
 	// Simple metrics: one Neyrox value -> one fixed Medsenger category.
 	for _, m := range syncedMetrics {
 		category := m.MedsengerCategory
-		err := s.appendMetric(acc, access, since, m.NeyroxMetric,
-			func(neyroxclient.Measurement) (string, bool) { return category, true },
-			&records, &newest)
+		newest, err := s.appendMetric(access, watermarks[m.NeyroxMetric], m.NeyroxMetric,
+			func(neyroxclient.Measurement) (string, bool) { return category, true }, &records)
 		if err != nil {
 			return s.handleFetchErr(acc, m.NeyroxMetric, err)
+		}
+		if newest.Valid {
+			advanced[m.NeyroxMetric] = newest
 		}
 	}
 
@@ -154,9 +164,22 @@ func (s *Syncer) syncAccount(acc *models.NeyroxAccount) error {
 		// Reference-table lookup failed: skip BP this cycle, don't abort the rest.
 		log.Printf("resolve blood pressure indicators for contract %d: %v", acc.ContractID, err)
 	} else if bpFn != nil {
-		if err := s.appendMetric(acc, access, since, "bloodpressure", bpFn, &records, &newest); err != nil {
-			return s.handleFetchErr(acc, "bloodpressure", err)
+		newest, err := s.appendMetric(access, watermarks[bloodPressureMetric], bloodPressureMetric, bpFn, &records)
+		if err != nil {
+			return s.handleFetchErr(acc, bloodPressureMetric, err)
 		}
+		if newest.Valid {
+			advanced[bloodPressureMetric] = newest
+		}
+	}
+
+	// Sleep: stage intervals, pushed to the six time_interval categories.
+	newest, metric, err := s.appendSleep(acc, access, watermarks[hypnogramMetric], &records)
+	if err != nil {
+		return s.handleFetchErr(acc, metric, err)
+	}
+	if newest.Valid {
+		advanced[hypnogramMetric] = newest
 	}
 
 	if len(records) > 0 {
@@ -164,8 +187,7 @@ func (s *Syncer) syncAccount(acc *models.NeyroxAccount) error {
 		if _, err := s.maigo.AddRecords(acc.ContractID, records); err != nil {
 			return fmt.Errorf("add records: %w", err)
 		}
-		acc.LastSync = newest
-		if err := s.db.NeyroxAccounts().Save(acc); err != nil {
+		if err := s.saveWatermarks(acc, advanced); err != nil {
 			return err
 		}
 	}
@@ -174,23 +196,80 @@ func (s *Syncer) syncAccount(acc *models.NeyroxAccount) error {
 	return nil
 }
 
+// loadWatermarks returns the per-metric watermark of every metric this syncer pushes.
+//
+// A metric with no row yet is seeded from the account's global LastSync and persisted
+// straight away. Persisting matters: LastSync keeps tracking the newest record of any
+// metric, so a metric that yields nothing on its first cycles (sleep, on day one) would
+// otherwise have its floor dragged forward with it and would never sync at all.
+func (s *Syncer) loadWatermarks(acc *models.NeyroxAccount) (map[string]sql.NullTime, error) {
+	watermarks, err := s.db.MetricSyncs().GetByContractID(acc.ContractID)
+	if err != nil {
+		return nil, fmt.Errorf("get watermarks: %w", err)
+	}
+	for _, metric := range syncedMetricNames() {
+		if _, ok := watermarks[metric]; ok {
+			continue
+		}
+		if err := s.db.MetricSyncs().Set(acc.ContractID, metric, acc.LastSync); err != nil {
+			return nil, fmt.Errorf("seed watermark %s: %w", metric, err)
+		}
+		watermarks[metric] = acc.LastSync
+	}
+	return watermarks, nil
+}
+
+// saveWatermarks persists the metrics that advanced and keeps the account's global
+// LastSync at the newest record of any metric, which is the floor a metric added later
+// starts from.
+func (s *Syncer) saveWatermarks(acc *models.NeyroxAccount, advanced map[string]sql.NullTime) error {
+	for metric, t := range advanced {
+		if err := s.db.MetricSyncs().Set(acc.ContractID, metric, t); err != nil {
+			return fmt.Errorf("save watermark %s: %w", metric, err)
+		}
+		if !acc.LastSync.Valid || t.Time.After(acc.LastSync.Time) {
+			acc.LastSync = t
+		}
+	}
+	return s.db.NeyroxAccounts().Save(acc)
+}
+
+// syncedMetricNames lists every watermark key.
+func syncedMetricNames() []string {
+	names := make([]string, 0, len(syncedMetrics)+2)
+	for _, m := range syncedMetrics {
+		names = append(names, m.NeyroxMetric)
+	}
+	return append(names, bloodPressureMetric, hypnogramMetric)
+}
+
+// sinceTime converts a watermark to the client's optional filter argument.
+func sinceTime(watermark sql.NullTime) *time.Time {
+	if !watermark.Valid {
+		return nil
+	}
+	return &watermark.Time
+}
+
 // appendMetric fetches one Neyrox metric and appends each new, non-null measurement
 // as a Medsenger record. categoryFn picks the category per measurement (returning
-// false skips it); newest advances to the latest date_device appended.
+// false skips it). It returns the latest date_device appended, i.e. the metric's new
+// watermark, which is invalid when nothing was appended.
 func (s *Syncer) appendMetric(
-	acc *models.NeyroxAccount, access string, since *time.Time, metric string,
+	access string, watermark sql.NullTime, metric string,
 	categoryFn func(neyroxclient.Measurement) (string, bool),
-	records *[]maigo.Record, newest *sql.NullTime,
-) error {
-	measurements, err := s.nc.FetchMeasurements(access, metric, since)
+	records *[]maigo.Record,
+) (sql.NullTime, error) {
+	var newest sql.NullTime
+	measurements, err := s.nc.FetchMeasurements(access, metric, sinceTime(watermark))
 	if err != nil {
-		return err
+		return newest, err
 	}
 	for _, meas := range measurements {
 		if meas.Value == nil {
 			continue
 		}
-		if acc.LastSync.Valid && !meas.DateDevice.After(acc.LastSync.Time) {
+		if watermark.Valid && !meas.DateDevice.After(watermark.Time) {
 			continue
 		}
 		category, ok := categoryFn(meas)
@@ -199,10 +278,10 @@ func (s *Syncer) appendMetric(
 		}
 		*records = append(*records, maigo.NewRecord(category, *meas.Value, meas.DateDevice))
 		if !newest.Valid || meas.DateDevice.After(newest.Time) {
-			*newest = sql.NullTime{Valid: true, Time: meas.DateDevice}
+			newest = sql.NullTime{Valid: true, Time: meas.DateDevice}
 		}
 	}
-	return nil
+	return newest, nil
 }
 
 // handleFetchErr maps a fetch/resolve error to syncAccount's return value: an expired
@@ -221,40 +300,60 @@ func (s *Syncer) handleFetchErr(acc *models.NeyroxAccount, metric string, err er
 	return fmt.Errorf("fetch %s: %w", metric, err)
 }
 
+// loadIndicators fills s.indicators (type_indicator UUID -> lower-cased name) from the
+// Neyrox typeindicators reference table. It is small reference data, fetched once per
+// process, and is what lets a measurement's type_indicator be read as a human label.
+func (s *Syncer) loadIndicators(access string) error {
+	if s.indicatorsLoaded {
+		return nil
+	}
+	indicators, err := s.nc.FetchTypeIndicators(access)
+	if err != nil {
+		return err
+	}
+	s.indicators = make(map[string]string, len(indicators))
+	for _, ind := range indicators {
+		if ind.Name == nil {
+			continue
+		}
+		s.indicators[ind.ID] = strings.ToLower(*ind.Name)
+	}
+	s.indicatorsLoaded = true
+	return nil
+}
+
+// indicatorMatching returns the UUID of the first indicator whose name contains one of
+// substrs, or "" when none does.
+func (s *Syncer) indicatorMatching(substrs ...string) string {
+	for id, name := range s.indicators {
+		for _, sub := range substrs {
+			if strings.Contains(name, sub) {
+				return id
+			}
+		}
+	}
+	return ""
+}
+
 // bpCategoryFn returns a resolver mapping a bloodpressure measurement to the
 // systolic_pressure / diastolic_pressure category by its type_indicator.
 //
 // Neyrox tags each BP value via type_indicator, a reference into the typeindicators
-// table; the two UUIDs are looked up once by name (the systolic row's name contains
-// "систол", the diastolic one "диастол") and cached for the process. Returns
-// (nil, nil) when neither can be resolved, so blood pressure is simply skipped.
+// table; the two UUIDs are looked up by name (the systolic row's name contains
+// "систол", the diastolic one "диастол"). Returns (nil, nil) when neither can be
+// resolved, so blood pressure is simply skipped.
 func (s *Syncer) bpCategoryFn(access string) (func(neyroxclient.Measurement) (string, bool), error) {
-	if !s.bpResolved {
-		indicators, err := s.nc.FetchTypeIndicators(access)
-		if err != nil {
-			return nil, err
-		}
-		for _, ind := range indicators {
-			if ind.Name == nil {
-				continue
-			}
-			switch name := strings.ToLower(*ind.Name); {
-			case strings.Contains(name, "систол") || strings.Contains(name, "systol"):
-				s.bpSystolic = ind.ID
-			case strings.Contains(name, "диастол") || strings.Contains(name, "diastol"):
-				s.bpDiastolic = ind.ID
-			}
-		}
-		s.bpResolved = true
-		if s.bpSystolic == "" || s.bpDiastolic == "" {
-			log.Printf("Neyrox: blood pressure indicators not fully resolved (systolic=%q diastolic=%q)",
-				s.bpSystolic, s.bpDiastolic)
-		}
+	if err := s.loadIndicators(access); err != nil {
+		return nil, err
 	}
-	if s.bpSystolic == "" && s.bpDiastolic == "" {
+	sys := s.indicatorMatching("систол", "systol")
+	dia := s.indicatorMatching("диастол", "diastol")
+	if sys == "" || dia == "" {
+		log.Printf("Neyrox: blood pressure indicators not fully resolved (systolic=%q diastolic=%q)", sys, dia)
+	}
+	if sys == "" && dia == "" {
 		return nil, nil
 	}
-	sys, dia := s.bpSystolic, s.bpDiastolic
 	return func(m neyroxclient.Measurement) (string, bool) {
 		switch {
 		case sys != "" && m.TypeIndicator == sys:

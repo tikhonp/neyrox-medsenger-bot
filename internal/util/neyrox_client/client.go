@@ -160,6 +160,31 @@ func (c *Client) FetchMeasurements(accessToken, metric string, since *time.Time)
 	return all, nil
 }
 
+// FetchHypnograms returns sleep hypnograms, optionally filtered to those with
+// date_device after `since`, following DRF pagination. One row is one night.
+func (c *Client) FetchHypnograms(accessToken string, since *time.Time) ([]Hypnogram, error) {
+	q := url.Values{}
+	q.Set("ordering", "date_device")
+	if since != nil {
+		q.Set("date_device_after", since.UTC().Format(time.RFC3339))
+	}
+	start := fmt.Sprintf("%s/api/v1/hypnogram/?%s", c.host, q.Encode())
+
+	var all []Hypnogram
+	err := c.getPaginated(accessToken, start, func(body io.Reader) (*string, error) {
+		var page paginatedHypnograms
+		if err := json.NewDecoder(body).Decode(&page); err != nil {
+			return nil, err
+		}
+		all = append(all, page.Results...)
+		return page.Next, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return all, nil
+}
+
 // FetchTypeIndicators returns the Neyrox typeindicators reference table (id + name).
 // It is small reference data; the worker resolves the systolic/diastolic rows from it.
 func (c *Client) FetchTypeIndicators(accessToken string) ([]TypeIndicator, error) {

@@ -1,6 +1,9 @@
 package neyroxclient
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // TokenPair is the response of POST /api/token/.
 type TokenPair struct {
@@ -38,4 +41,34 @@ type TypeIndicator struct {
 type paginatedTypeIndicators struct {
 	Next    *string         `json:"next"`
 	Results []TypeIndicator `json:"results"`
+}
+
+// Hypnogram is one night's sleep hypnogram from /api/v1/hypnogram/ — "Гипнограмма
+// одной ночи (массив интервалов глубины сна)".
+//
+// Data is left raw because the OpenAPI schema declares it only as `oneOf: [{}, null]`.
+// Its element shape is firmware-dependent (the spec's own note: "Прошивка 2.7.40 —
+// time_long_min, 2.7.41 — time_long_sec"), so it is decoded by ParseIntervals.
+type Hypnogram struct {
+	ID            string          `json:"id"`
+	TypeIndicator string          `json:"type_indicator"`
+	Data          json.RawMessage `json:"data"`
+	TotalMinutes  *int            `json:"total_minutes"`
+	DateDevice    time.Time       `json:"date_device"`
+	CreatedAt     time.Time       `json:"created_at"`
+}
+
+// paginatedHypnograms matches DRF's default pagination wrapper for hypnograms.
+type paginatedHypnograms struct {
+	Next    *string     `json:"next"`
+	Results []Hypnogram `json:"results"`
+}
+
+// StageInterval is one decoded hypnogram element: a sleep stage over a time span.
+// Stage is the raw label as Neyrox reports it; mapping it to a Medsenger category is
+// the caller's job.
+type StageInterval struct {
+	Stage string
+	Start time.Time
+	End   time.Time
 }

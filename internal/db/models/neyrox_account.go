@@ -61,8 +61,22 @@ func (n *neyroxAccounts) Connect(contractID int, email, password string) (*Neyro
 			sync_err_msg_ready = TRUE, sync_success_msg_sent = FALSE
 		RETURNING *
 	`
+	tx, err := n.db.Beginx()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// Reconnecting resets the account's watermarks, so the per-metric ones must go
+	// too — the upsert leaves the row in place, so the FK cascade never fires.
+	if _, err := tx.Exec(`DELETE FROM neyrox_metric_sync WHERE contract_id = $1`, contractID); err != nil {
+		return nil, err
+	}
 	var a NeyroxAccount
-	if err := n.db.Get(&a, query, contractID, email, password); err != nil {
+	if err := tx.Get(&a, query, contractID, email, password); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 	return &a, nil
