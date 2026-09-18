@@ -163,7 +163,7 @@ func TestSessionRecordsLaysStagesInsideReportingWindows(t *testing.T) {
 		t.Errorf("records:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
 	for _, r := range records {
-		if r.Time == nil || !r.Time.Time.Equal(mustStart(t, r)) {
+		if r.Time == nil || !r.Time.Equal(mustStart(t, r)) {
 			t.Errorf("record %s is timestamped %v, want its start", describe(t, r), r.Time)
 		}
 	}
