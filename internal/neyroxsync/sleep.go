@@ -26,13 +26,15 @@ const (
 
 // hypnogramMetric is both the Neyrox endpoint and the watermark key for sleep.
 //
-// /api/v1/hypnogram/ is the only source of real sleep intervals. /api/v1/sleep/ is NOT
-// usable for these categories: its rows are the running per-stage totals of the current
-// session, in hours, re-reported every ~15 minutes — verified against the live API, e.g.
-// one night reporting deep sleep as 0.2 → 0.5 → 0.8 → … → 2.5 h at successive
-// timestamps. date_device is the moment of the report, not the start of a stage, so no
-// row of it describes a time span; after waking the values fluctuate as summaries are
-// re-sent. Turning that into intervals would mean inventing when each stage happened.
+// /api/v1/hypnogram/ is the only source of real sleep intervals. /api/v1/sleep/ cannot be
+// read as intervals: its rows are the running per-stage totals of the current session, in
+// hours, re-reported every ~15 minutes — verified against the live API, e.g. one night
+// reporting deep sleep as 0.2 → 0.5 → 0.8 → … → 2.5 h at successive timestamps.
+// date_device is the moment of the report, not the start of a stage, so no row of it
+// describes a time span; after waking the values fluctuate as summaries are re-sent. A
+// band whose firmware sends no hypnogram at all produces nothing else, though, so for a
+// night without one those totals are approximated into intervals at reporting resolution
+// by sleep_summary.go; a night with a hypnogram is handled here only.
 const hypnogramMetric = "hypnogram"
 
 // sleepStageMatches maps a hypnogram element's stage label to a Medsenger category by

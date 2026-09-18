@@ -53,9 +53,11 @@ var syncedMetrics = []metricMapping{
 	// --- Handled separately in appendSleep (see sleep.go) ---
 	// hypnogram is not a scalar: it maps to the six time_interval categories (in_bed,
 	// awake, asleep_core, asleep_deep, asleep_REM, asleep_unspecified).
-	//
-	// The `sleep` endpoint stays out entirely: its rows are running per-stage totals in
-	// hours, re-sent every ~15 min, not measurements of an instant — see sleep.go.
+
+	// --- Handled separately in appendSleepSummaries (see sleep_summary.go) ---
+	// sleep is not a scalar either: its rows are running per-stage totals in hours,
+	// re-sent every ~15 min, not measurements of an instant. For a night that has no
+	// hypnogram they are synthesized into the same time_interval categories.
 
 	// --- No matching Medsenger category yet (register one, then uncomment) ---
 	// {NeyroxMetric: "averagepulse", MedsengerCategory: ""},            // only "pulse" (resting) exists
@@ -182,11 +184,24 @@ func (s *Syncer) syncAccount(acc *models.NeyroxAccount) error {
 		advanced[hypnogramMetric] = newest
 	}
 
+	// Sleep summaries: the same categories, synthesized for nights without a hypnogram.
+	newest, metric, err = s.appendSleepSummaries(acc, access, watermarks[sleepSummaryMetric], &records)
+	if err != nil {
+		return s.handleFetchErr(acc, metric, err)
+	}
+	if newest.Valid {
+		advanced[sleepSummaryMetric] = newest
+	}
+
 	if len(records) > 0 {
 		log.Printf("Pushing %d records to Medsenger for contract %d", len(records), acc.ContractID)
 		if _, err := s.maigo.AddRecords(acc.ContractID, records); err != nil {
 			return fmt.Errorf("add records: %w", err)
 		}
+	}
+	// A watermark can move without records: a sleep session a hypnogram already covers
+	// is skipped, not pushed, and must still be left behind.
+	if len(advanced) > 0 {
 		if err := s.saveWatermarks(acc, advanced); err != nil {
 			return err
 		}
@@ -236,11 +251,11 @@ func (s *Syncer) saveWatermarks(acc *models.NeyroxAccount, advanced map[string]s
 
 // syncedMetricNames lists every watermark key.
 func syncedMetricNames() []string {
-	names := make([]string, 0, len(syncedMetrics)+2)
+	names := make([]string, 0, len(syncedMetrics)+3)
 	for _, m := range syncedMetrics {
 		names = append(names, m.NeyroxMetric)
 	}
-	return append(names, bloodPressureMetric, hypnogramMetric)
+	return append(names, bloodPressureMetric, hypnogramMetric, sleepSummaryMetric)
 }
 
 // sinceTime converts a watermark to the client's optional filter argument.

@@ -27,6 +27,8 @@ func TestSleepCategory(t *testing.T) {
 		{"", categoryAsleepUnspecified, false},
 		{"3", categoryAsleepUnspecified, false},
 		{"Неведомая фаза", categoryAsleepUnspecified, false},
+		// The sleep summary endpoint's fourth indicator; sleep_summary.go must drop it.
+		{"Качество сна (Sleep Quality)", categoryAsleepUnspecified, false},
 	}
 	for _, tt := range tests {
 		got, known := sleepCategory(tt.label)
